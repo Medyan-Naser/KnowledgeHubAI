@@ -1,0 +1,156 @@
+---
+# Temporal Server (simplified for development)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: enterprise-rag
+  labels:
+    app: temporal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h enterprise-rag-postgres-rw -p 5432 -U postgres; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              # Create Temporal databases
+              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'temporal'" | grep -q 1 || \
+              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -c "CREATE DATABASE temporal"
+              
+              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'temporal_visibility'" | grep -q 1 || \
+              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -c "CREATE DATABASE temporal_visibility"
+          env:
+            - name: PGPASSWORD
+              value: "postgres"
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.22.4
+          ports:
+            - containerPort: 7233
+              name: frontend
+            - containerPort: 7234
+              name: history
+            - containerPort: 7235
+              name: matching
+            - containerPort: 7239
+              name: worker
+          env:
+            - name: DB
+              value: "postgresql"
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_SEEDS
+              value: "enterprise-rag-postgres-rw"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PWD
+              value: "postgres"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+---
+# Temporal Web UI
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-web
+  namespace: enterprise-rag
+  labels:
+    app: temporal-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-web
+  template:
+    metadata:
+      labels:
+        app: temporal-web
+    spec:
+      containers:
+        - name: temporal-web
+          image: temporalio/ui:2.21.3
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: "temporal-frontend:7233"
+            - name: TEMPORAL_CORS_ORIGINS
+              value: "http://localhost:3000"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+# Temporal Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-frontend
+  namespace: enterprise-rag
+  labels:
+    app: temporal
+spec:
+  type: ClusterIP
+  ports:
+    - port: 7233
+      targetPort: 7233
+      protocol: TCP
+      name: frontend
+  selector:
+    app: temporal
+
+---
+# Temporal Web UI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-web
+  namespace: enterprise-rag
+  labels:
+    app: temporal-web
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30088
+      protocol: TCP
+      name: http
+  selector:
+    app: temporal-web
