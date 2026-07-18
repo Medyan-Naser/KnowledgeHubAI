@@ -31,13 +31,18 @@ async def chat(
     """
     try:
         service = RAGService(session)
-        response = await service.query(query=request.query, top_k=request.top_k)
+        response = await service.query(
+            query=request.query, 
+            top_k=request.top_k,
+            debug=request.debug
+        )
 
         logger.info(
             "chat_query_processed",
             query_length=len(request.query),
             sources_count=len(response.sources),
             latency_ms=response.latency_ms,
+            debug_requested=request.debug,
         )
 
         return response
