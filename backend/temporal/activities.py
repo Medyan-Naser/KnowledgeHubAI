@@ -8,6 +8,7 @@ import structlog
 from temporalio import activity
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+import mlflow
 
 logger = structlog.get_logger(__name__)
 
@@ -208,6 +209,23 @@ class DocumentActivities:
                     time.sleep(batch_delay)
 
             session.commit()
+
+            # Log to MLflow
+            try:
+                settings = _get_settings()
+                mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+                mlflow.set_experiment("document-processing")
+                
+                with mlflow.start_run(run_name=f"embeddings-{document_id[:8]}"):
+                    mlflow.log_param("document_id", document_id)
+                    mlflow.log_param("embedding_model", settings.embedding_model)
+                    mlflow.log_param("total_chunks", total_chunks)
+                    mlflow.log_metric("embeddings_generated", total_chunks)
+                    mlflow.log_metric("batch_size", batch_size)
+                    
+                    logger.info("mlflow_tracking_logged", document_id=document_id)
+            except Exception as e:
+                logger.warning("mlflow_tracking_failed", error=str(e))
 
             logger.info(
                 "activity_generate_embeddings_complete",
