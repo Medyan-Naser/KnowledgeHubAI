@@ -1,0 +1,60 @@
+---
+# Service for read-write (primary) access
+apiVersion: v1
+kind: Service
+metadata:
+  name: enterprise-rag-postgres-rw
+  namespace: enterprise-rag
+  labels:
+    app: postgresql
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    cnpg.io/cluster: enterprise-rag-postgres
+    role: primary
+
+---
+# Service for read-only (replica) access
+apiVersion: v1
+kind: Service
+metadata:
+  name: enterprise-rag-postgres-ro
+  namespace: enterprise-rag
+  labels:
+    app: postgresql
+    role: replica
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    cnpg.io/cluster: enterprise-rag-postgres
+    role: replica
+
+---
+# Service for any instance (load balanced)
+apiVersion: v1
+kind: Service
+metadata:
+  name: enterprise-rag-postgres
+  namespace: enterprise-rag
+  labels:
+    app: postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    cnpg.io/cluster: enterprise-rag-postgres
