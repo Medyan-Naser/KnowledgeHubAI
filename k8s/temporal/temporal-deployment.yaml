@@ -17,26 +17,6 @@ spec:
       labels:
         app: temporal
     spec:
-      initContainers:
-        - name: wait-for-postgres
-          image: postgres:15-alpine
-          command:
-            - sh
-            - -c
-            - |
-              until pg_isready -h enterprise-rag-postgres-rw -p 5432 -U postgres; do
-                echo "Waiting for PostgreSQL..."
-                sleep 2
-              done
-              # Create Temporal databases
-              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'temporal'" | grep -q 1 || \
-              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -c "CREATE DATABASE temporal"
-              
-              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'temporal_visibility'" | grep -q 1 || \
-              PGPASSWORD=postgres psql -h enterprise-rag-postgres-rw -U postgres -c "CREATE DATABASE temporal_visibility"
-          env:
-            - name: PGPASSWORD
-              value: "postgres"
       containers:
         - name: temporal
           image: temporalio/auto-setup:1.22.4
@@ -50,16 +30,8 @@ spec:
             - containerPort: 7239
               name: worker
           env:
-            - name: DB
-              value: "postgresql"
-            - name: DB_PORT
-              value: "5432"
-            - name: POSTGRES_SEEDS
-              value: "enterprise-rag-postgres-rw"
-            - name: POSTGRES_USER
-              value: "postgres"
-            - name: POSTGRES_PWD
-              value: "postgres"
+            - name: SKIP_DB_CREATE
+              value: "true"
           resources:
             requests:
               memory: "512Mi"
