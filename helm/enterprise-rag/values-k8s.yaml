@@ -1,0 +1,200 @@
+# Helm values for full Kubernetes deployment
+# All services running in K8s (no Docker Compose)
+
+global:
+  namespace: enterprise-rag
+
+# External services configuration (for K8s deployment)
+externalServices:
+  postgresql:
+    host: "enterprise-rag-postgres-rw"
+    port: 5432
+    database: "enterprise_rag"
+    user: "postgres"
+    username: "postgres"  # Helper template looks for this
+    password: "dummy"  # Using CloudNativePG secret instead
+  temporal:
+    host: "temporal-frontend"
+    port: 7233
+  redis:
+    host: "redis"
+    port: 6379
+    password: ""  # No password for Redis
+  ollama:
+    host: "http://ollama:11434"
+  mlflow:
+    uri: "http://mlflow:5000"
+
+# Backend API configuration
+backend:
+  replicaCount: 1  # Single replica due to ReadWriteOnce volume
+  
+  image:
+    repository: enterprise-rag-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30000
+  
+  env:
+    # Database - PostgreSQL in K8s
+    POSTGRES_HOST: "enterprise-rag-postgres-rw"
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: "postgres"
+    POSTGRES_DB: "enterprise_rag"
+    
+    # Ollama - Still on host for GPU access
+    OLLAMA_HOST: "http://host.docker.internal:11434"
+    LLM_MODEL: "llama3"
+    EMBEDDING_MODEL: "nomic-embed-text"
+    
+    # Redis - In K8s
+    REDIS_HOST: "redis"
+    REDIS_PORT: "6379"
+    
+    # Temporal - In K8s
+    TEMPORAL_HOST: "temporal-frontend:7233"
+    TEMPORAL_NAMESPACE: "default"
+    
+    # MLflow - In K8s
+    MLFLOW_TRACKING_URI: "http://mlflow:5000"
+    
+    # RAG Configuration
+    CHUNK_SIZE: "500"
+    CHUNK_OVERLAP: "50"
+    TOP_K_RESULTS: "5"
+    EMBEDDING_DIMENSIONS: "768"
+    EMBEDDING_BATCH_SIZE: "5"
+    EMBEDDING_BATCH_DELAY_SECONDS: "0.5"
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Worker configuration
+worker:
+  replicaCount: 3
+  
+  image:
+    repository: enterprise-rag-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "3Gi"
+      cpu: "2000m"
+  
+  env:
+    # Same as backend
+    POSTGRES_HOST: "enterprise-rag-postgres-rw"
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: "postgres"
+    POSTGRES_DB: "enterprise_rag"
+    
+    OLLAMA_HOST: "http://host.docker.internal:11434"
+    LLM_MODEL: "llama3"
+    EMBEDDING_MODEL: "nomic-embed-text"
+    
+    REDIS_HOST: "redis"
+    REDIS_PORT: "6379"
+    
+    TEMPORAL_HOST: "temporal-frontend:7233"
+    TEMPORAL_NAMESPACE: "default"
+    
+    MLFLOW_TRACKING_URI: "http://mlflow:5000"
+    
+    CHUNK_SIZE: "500"
+    CHUNK_OVERLAP: "50"
+    EMBEDDING_DIMENSIONS: "768"
+    EMBEDDING_BATCH_SIZE: "5"
+    EMBEDDING_BATCH_DELAY_SECONDS: "0.5"
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+
+# Disable sub-charts (we deploy them separately)
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+temporal:
+  enabled: false
+
+mlflow:
+  enabled: false
+
+# External database configuration
+externalDatabase:
+  host: "enterprise-rag-postgres-rw"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  database: "enterprise_rag"
+
+# External Redis configuration
+externalRedis:
+  host: "redis"
+  port: 6379
+
+# Persistent volume for uploads
+persistence:
+  enabled: true
+  storageClass: "standard"
+  size: 20Gi
+  accessMode: ReadWriteOnce  # Kind doesn't support ReadWriteMany
+
+# Ingress (optional)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: enterprise-rag.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Service Monitor for Prometheus (optional)
+serviceMonitor:
+  enabled: false
+  interval: 30s
