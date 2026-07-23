@@ -1,0 +1,17 @@
+{{- if .Values.temporal.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "enterprise-rag.fullname" . }}-temporal-data
+  labels:
+    {{- include "enterprise-rag.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.temporal.persistence.storageClass }}
+  storageClassName: {{ .Values.temporal.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.temporal.persistence.size }}
+{{- end }}

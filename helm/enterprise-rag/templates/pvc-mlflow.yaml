@@ -1,0 +1,17 @@
+{{- if .Values.mlflow.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "enterprise-rag.fullname" . }}-mlflow-data
+  labels:
+    {{- include "enterprise-rag.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.mlflow.persistence.storageClass }}
+  storageClassName: {{ .Values.mlflow.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.persistence.size }}
+{{- end }}
