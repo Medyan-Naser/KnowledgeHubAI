@@ -1,5 +1,6 @@
 """LLM service for generating responses using Ollama."""
 
+import httpx
 import structlog
 import ollama
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -31,7 +32,10 @@ class LLMService:
 
     def __init__(self):
         self.model = settings.llm_model
-        self.client = ollama.Client(host=settings.ollama_host)
+        self.client = ollama.Client(
+            host=settings.ollama_host,
+            timeout=httpx.Timeout(timeout=300.0),
+        )
 
     @retry(
         stop=stop_after_attempt(3),
@@ -77,8 +81,12 @@ class LLMService:
             ],
         )
 
-        response_text = response["message"]["content"]
-        token_count = response.get("eval_count")
+        if hasattr(response, 'message'):
+            response_text = response.message.content
+            token_count = getattr(response, 'eval_count', None)
+        else:
+            response_text = response["message"]["content"]
+            token_count = response.get("eval_count")
         elapsed_ms = (time.time() - start_time) * 1000
 
         logger.info(

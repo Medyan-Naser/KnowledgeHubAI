@@ -57,7 +57,11 @@ class RAGService:
         
         logger.info("vector_search_executing", top_k=top_k)
         
+        # Force sequential scan: IVFFlat index built on empty table returns 0 rows.
+        # SET LOCAL reverts automatically at transaction end.
+        await self.session.execute(text("SET LOCAL enable_indexscan = off"))
         result = await self.session.execute(query)
+        await self.session.execute(text("SET LOCAL enable_indexscan = on"))
         rows = result.all()
         
         logger.info("vector_search_raw_results", num_rows=len(rows))
@@ -105,7 +109,13 @@ class RAGService:
         """
         start_time = time.time()
 
-        query_embedding = self.embedding_service.generate_embedding(query)
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        # Run sync Ollama calls in thread pool so event loop stays free for health probes
+        query_embedding = await loop.run_in_executor(
+            None, self.embedding_service.generate_embedding, query
+        )
 
         similar_chunks = await self.search_similar_chunks(query_embedding, top_k)
 
@@ -117,8 +127,10 @@ class RAGService:
             full_prompt = ""
         else:
             context_chunks = [chunk.content for chunk, _, _ in similar_chunks]
-            response_text, token_count, system_prompt, full_prompt = self.llm_service.generate_response(
-                query, context_chunks, return_prompts=debug
+            response_text, token_count, system_prompt, full_prompt = await loop.run_in_executor(
+                None, lambda: self.llm_service.generate_response(
+                    query, context_chunks, return_prompts=debug
+                )
             )
 
             sources = [
