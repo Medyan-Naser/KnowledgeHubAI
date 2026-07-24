@@ -48,7 +48,11 @@ This project demonstrates enterprise-level deployment patterns using Kubernetes 
 
 ### Frontend
 
-![Frontend Docments tab](IMGs/documents_tab.png)
+#### Documents Tab
+![Frontend Documents tab](IMGs/frontend_documents.png)
+
+#### Chat Tab
+![Frontend Chat tab](IMGs/frontend_chat.png)
 
 ### Temporal
 
